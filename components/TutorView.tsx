@@ -496,7 +496,7 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
             )}
          </div>
 
-         <div className="p-4 border-t border-stone-100 flex gap-2 items-center bg-white">
+         <div className="p-4 border-t border-stone-100 flex gap-2 items-end bg-white">
             <div className="relative">
                 {showTools && (
                     <div className="absolute bottom-full left-0 mb-3 flex flex-col gap-2 bg-white p-1.5 rounded-full shadow-xl border border-stone-200 animate-fade-in z-50 min-w-[3rem] items-center">
@@ -519,7 +519,7 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
                 )}
                 <button onClick={() => setShowTools(!showTools)} className="p-3 rounded-full text-stone-400 hover:bg-stone-100 transition-all">{showTools ? <X size={20} /> : <Plus size={20} />}</button>
             </div>
-            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(input)} placeholder={isQuizActive ? "Quiz Active..." : (liveMode !== 'off' ? "Live Mode Active..." : (isQuickMode ? "Ask for a quick answer..." : "Ask the tutor..."))} disabled={isListening || isQuizActive || (liveMode !== 'off' && !isLoading)} className="flex-1 bg-stone-50 border-transparent focus:bg-white focus:border-stone-200 focus:ring-0 rounded-full px-6 py-3 text-sm transition-all shadow-inner" />
+            <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(input); } }} placeholder={isQuizActive ? "Quiz Active..." : (liveMode !== 'off' ? "Live Mode Active..." : (isQuickMode ? "Ask for a quick answer..." : "Ask the tutor..."))} disabled={isListening || isQuizActive || (liveMode !== 'off' && !isLoading)} className="flex-1 bg-stone-50 border-transparent focus:bg-white focus:border-stone-200 focus:ring-0 rounded-2xl px-6 py-3 text-sm transition-all shadow-inner resize-none overflow-y-auto" rows={1} ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 120)}px`; } }} />
             <button onClick={() => handleSendMessage("I am ready. Ask me a question.")} disabled={isQuizActive || isLoading || liveMode !== 'off'} className="p-3 rounded-full text-stone-400 hover:bg-purple-50 hover:text-purple-600 transition-all"><MessageCircleQuestion size={20} /></button>
             <button onClick={() => toggleManualMic(input, setInput)} disabled={isQuizActive} className={`p-3 rounded-full transition-all ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-stone-400 hover:bg-stone-50'}`}>{isListening ? <MicOff size={20} /> : <Mic size={20} />}</button>
             <button onClick={isLoading ? handleStopGeneration : () => handleSendMessage(input)} disabled={isQuizActive || (liveMode !== 'off' && !isLoading) || (!input.trim() && !isLoading)} className={`p-3 rounded-full text-white transition-all shadow-md ${isLoading ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50'}`}>{isLoading ? <Square size={18} fill="currentColor" /> : <Send size={18} />}</button>
