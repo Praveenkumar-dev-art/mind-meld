@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600">
+  <defs>
+    <linearGradient id="primary-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+    <linearGradient id="secondary-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+    <linearGradient id="tertiary-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EA580C" />
+      <stop offset="100%" stop-color="#F97316" />
+    </linearGradient>
+    <filter id="drop-shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.1" />
+    </filter>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#F8FAFC" rx="16" />
+  
+  <!-- Title -->
+  <text x="500" y="50" font-family="Inter, sans-serif" font-size="28" font-weight="bold" fill="#1E293B" text-anchor="middle">MindMeld: Data Flow Architecture</text>
+  <text x="500" y="80" font-family="Inter, sans-serif" font-size="14" font-weight="normal" fill="#64748B" text-anchor="middle">End-to-End Input/Output Pipeline</text>
+
+  <!-- 1. Diary Phase -->
+  <g transform="translate(100, 150)" filter="url(#drop-shadow)">
+    <rect width="220" height="180" rx="12" fill="white" />
+    <path d="M0,12 a12,12 0 0,1 12,-12 h196 a12,12 0 0,1 12,12 v40 h-220 z" fill="url(#primary-grad)" />
+    <text x="110" y="32" font-family="Inter, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">1. Passive Diary Input</text>
+    <text x="110" y="80" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">Unstructured Data</text>
+    <text x="110" y="105" font-family="Inter, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">• Typed Notes / Texts</text>
+    <text x="110" y="125" font-family="Inter, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">• Image Uploads (Sketches)</text>
+    <text x="110" y="155" font-family="Inter, sans-serif" font-size="12" font-weight="bold" fill="#4F46E5" text-anchor="middle">Gemini Vision Processing</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M320,240 h60 l-10,-10 m10,10 l-10,10" stroke="#CBD5E1" stroke-width="3" fill="none" />
+
+  <!-- 2. Processing & Transfer -->
+  <g transform="translate(390, 150)" filter="url(#drop-shadow)">
+    <rect width="220" height="180" rx="12" fill="white" />
+    <path d="M0,12 a12,12 0 0,1 12,-12 h196 a12,12 0 0,1 12,12 v40 h-220 z" fill="url(#tertiary-grad)" />
+    <text x="110" y="32" font-family="Inter, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">2. Context Organizer</text>
+    <text x="110" y="80" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">Structured Extraction</text>
+    <text x="110" y="105" font-family="Inter, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">• Clean Summary</text>
+    <text x="110" y="125" font-family="Inter, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">• Core Insights Identified</text>
+    <text x="110" y="155" font-family="Inter, sans-serif" font-size="12" font-weight="bold" fill="#EA580C" text-anchor="middle">Memory State Transferred</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M610,240 h60 l-10,-10 m10,10 l-10,10" stroke="#CBD5E1" stroke-width="3" fill="none" />
+
+  <!-- 3. Tutor Phase -->
+  <g transform="translate(680, 150)" filter="url(#drop-shadow)">
+    <rect width="220" height="180" rx="12" fill="white" />
+    <path d="M0,12 a12,12 0 0,1 12,-12 h196 a12,12 0 0,1 12,12 v40 h-220 z" fill="url(#secondary-grad)" />
+    <text x="110" y="32" font-family="Inter, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">3. Active Socratic Tutor</text>
+    <text x="110" y="80" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">Dynamic Multi-Modal Output</text>
+    <text x="110" y="105" font-family="Inter, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">• Interrogative Dialogue</text>
+    <text x="110" y="125" font-family="Inter, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">• Mermaid.js Concept Maps</text>
+    <text x="110" y="145" font-family="Inter, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">• Gen-UI SVG Illustrations</text>
+  </g>
+
+  <!-- Feedback Loop -->
+  <path d="M790,330 v40 a20,20 0 0,1 -20,20 h-540 a20,20 0 0,1 -20,-20 v-20" stroke="#059669" stroke-width="3" stroke-dasharray="6,6" fill="none" />
+  <path d="M210,350 l10,-10 m-10,10 l10,10" stroke="#059669" stroke-width="3" fill="none" />
+  
+  <text x="500" y="410" font-family="Inter, sans-serif" font-size="14" font-weight="bold" fill="#059669" text-anchor="middle">Real-Time User Response Loop</text>
+  <text x="500" y="430" font-family="Inter, sans-serif" font-size="12" font-weight="normal" fill="#64748B" text-anchor="middle">Speech-to-Text Input • Concept Clarification • Updated Visuals</text>
+
+  <!-- Legend -->
+  <rect x="250" y="480" width="500" height="90" rx="8" fill="#FFFFFF" stroke="#E2E8F0" />
+  <text x="270" y="510" font-family="Inter, sans-serif" font-size="12" font-weight="bold" fill="#334155">Input Modalities:</text>
+  <text x="270" y="530" font-family="Inter, sans-serif" font-size="12" fill="#64748B">Text, Image, Live Voice (Web Speech API)</text>
+  
+  <text x="550" y="510" font-family="Inter, sans-serif" font-size="12" font-weight="bold" fill="#334155">Output Modalities:</text>
+  <text x="550" y="530" font-family="Inter, sans-serif" font-size="12" fill="#64748B">Generative UI (SVG/Mermaid), TTS, Chat</text>
+</svg>

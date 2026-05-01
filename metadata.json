@@ -1,0 +1,7 @@
+{
+  "name": "Remix2:MindMeld",
+  "description": "A dual-personality AI learning companion that switches between a passive diary organizer and an active Socratic tutor.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

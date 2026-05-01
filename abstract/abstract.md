@@ -1,0 +1,22 @@
+# MindMeld: A Dual-Personality AI Learning Companion
+
+## Core AI Concept
+MindMeld is a novel, context-aware educational platform that employs a dual-persona AI architecture. It operates in two distinct but deeply interconnected modes: a **Passive Diary Organizer** and an **Active Socratic Tutor**. The system intelligently ingests unstructured user thoughts, notes, and visual data (images) in the Diary mode. It then processes, summarizes, and extracts core learning concepts from these inputs. When the user transitions to the Tutor mode, the AI leverages this structured memory to initiate an interactive, dynamically generated Socratic dialogue, actively questioning the user to reinforce their own raw knowledge.
+
+## Technical Complexity
+The application showcases substantial technical depth by weaving together several advanced modalities and state-management techniques:
+1. **Multi-Modal AI Processing:** Seamlessly handles both textual streams and image-based data, utilizing advanced language and vision models to parse semantic meaning from user-provided notes or diagrams.
+2. **Contextual Memory Transfer Architecture:** Implements a robust shared-state memory system. The "Diary" persona processes raw input into structured insights and summaries, which are persistently transferred to the "Tutor" persona, maintaining an uninterrupted cognitive thread.
+3. **Dynamic Visual Generation (Generative UI):** Sifts through user concepts and dynamically prompts the AI to generate raw **Mermaid.js Concept Maps** and scalable **SVG Illustrations**, which are rendered iteratively on the frontend to provide adaptive visual context.
+4. **Real-Time Voice Interaction:** Integrates continuous Speech-to-Text (Live Mode) and Text-to-Speech (TTS) capabilities, managing asynchronous interrupts and audio streams for a conversational Socratic learning experience.
+
+## Innovations
+The foremost innovation of MindMeld lies in its **"Flipped Personalization"** model. Traditional EdTech platforms use AI to teach static material; MindMeld uses AI to help the user master their *own* self-curated material by forcing active recall and defense of concepts. Furthermore, the capacity to seamlessly pivot from passive summarization to an active, visually-augmented quiz environment—while automatically generating dependency graphs and conceptual maps—represents a major leap in multimodal adaptive learning.
+
+## Abstraction Detailing (Technical Depth & Clarity)
+MindMeld abstracts the vast complexity of context-window management, prompt structuring, and multimedia rendering away from the end-user. The project's architecture features a strict separation of concerns:
+- **Services Layer:** Isolates external AI calls (`gemini.ts`), visual transformations, and speech APIs.
+- **State & Hooks Layer:** Employs modular React hooks (`useLiveMode`, `useQuiz`) to govern the complex mechanics of real-time polling, audio state, and learning progression.
+- **UI Layer:** A pristine, Tailwind-styled React interface that conditionally renders the appropriate persona context without cognitive overload.
+
+This modular technical foundation not only demonstrates robust engineering practices but also provides expansive space for future innovation, such as multi-user collaborative study sessions or integration with deeper academic knowledge bases.

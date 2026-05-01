@@ -1,0 +1,532 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Mic, MicOff, Headphones, Brain, CheckCircle, XCircle, ArrowRight, Plus, X, Volume2, Network, Image as ImageIcon, Link, BrainCircuit, Edit3, Save, Loader, MessageCircleQuestion, Square, RefreshCw, Wand2, Play, Trash2 } from 'lucide-react';
+import mermaid from 'mermaid';
+import { generateTutorResponse, generateMindmapOnly, regenerateSVG, generateAnimatedSVG } from '../services/gemini';
+import { speak, stopSpeaking } from '../services/speech';
+import { resizeImage } from '../services/mediaUtils';
+import { TutorResponse, ChatMessage } from '../types';
+import { useQuiz } from '../hooks/useQuiz';
+import { useLiveMode } from '../hooks/useLiveMode';
+
+interface TutorViewProps {
+  contextMemory: string;
+  contextImage?: string | null;
+  contextImageMime?: string | null;
+  activeTutorMemory?: string | null;
+}
+
+const STORAGE_KEY_HISTORY = 'mindmeld_chat_history';
+const STORAGE_KEY_VISUALS = 'mindmeld_visual_state_v3';
+
+type VisualTab = 'illustration' | 'map';
+
+// --- Helper Components ---
+const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return (
+    <div className="text-sm leading-relaxed whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="font-bold text-blue-900">{part.slice(2, -2)}</strong>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </div>
+  );
+};
+
+const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, contextImageMime, activeTutorMemory }) => {
+  // --- STATE ---
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [currentMindmap, setCurrentMindmap] = useState<string | null>(null);
+  const [currentSvg, setCurrentSvg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<VisualTab>('illustration');
+  const [isMapLoading, setIsMapLoading] = useState(false);
+  const [isRegeneratingVisual, setIsRegeneratingVisual] = useState(false);
+  const [isAnimatingVisual, setIsAnimatingVisual] = useState(false);
+  
+  const [isReloadModalOpen, setIsReloadModalOpen] = useState(false);
+  const [reloadStep, setReloadStep] = useState<'ask' | 'input'>('ask');
+  const [reloadSuggestion, setReloadSuggestion] = useState('');
+  const [mindmapSvg, setMindmapSvg] = useState<string>('');
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  
+  const [localImage, setLocalImage] = useState<string | null>(null);
+  const [localImageMime, setLocalImageMime] = useState<string | null>(null);
+
+  const [localMemory, setLocalMemory] = useState<string>('');
+  const [isMemoryEditorOpen, setIsMemoryEditorOpen] = useState(false);
+  const [memoryEditText, setMemoryEditText] = useState('');
+  
+  // NEW: Quick Mode state
+  const [isQuickMode, setIsQuickMode] = useState(false);
+
+  // --- REFS ---
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasInitialized = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // --- HOOKS ---
+  // To avoid circular dependency during render, we use a ref for the message handler that the hooks can call
+  const sendMessageRef = useRef<(text: string) => void>(() => {});
+
+  const {
+    liveMode,
+    isListening, // Manual mic
+    toggleLiveMode,
+    toggleManualMic,
+    setLiveMode,
+    restartLiveListeningIfActive,
+    recognitionRef // needed to abort during send
+  } = useLiveMode({
+    onUserInput: (text) => sendMessageRef.current(text),
+    isLoading
+  });
+
+  const {
+    quizData,
+    isQuizActive,
+    currentQuestionIndex,
+    selectedOption,
+    isAnswerRevealed,
+    score,
+    startQuiz,
+    handleOptionSelect,
+    handleNextQuestion
+  } = useQuiz({
+    setMessages,
+    contextMemory,
+    activeTutorMemory: localMemory, // Use the local override if present
+    setIsLoading,
+    setLiveMode,
+    handleSendMessage: (text) => sendMessageRef.current(text)
+  });
+
+  // --- EFFECTS ---
+
+  useEffect(() => {
+    if (activeTutorMemory) {
+        setLocalMemory(activeTutorMemory);
+        setMemoryEditText(activeTutorMemory); // Sync Active Tutor Memory to Editor so it appears in modal
+    }
+  }, [activeTutorMemory]);
+
+  useEffect(() => {
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'neutral',
+        fontFamily: 'Inter, sans-serif',
+        securityLevel: 'loose',
+        mindmap: { padding: 50, useMaxWidth: false }
+    });
+    
+    const savedVisuals = localStorage.getItem(STORAGE_KEY_VISUALS);
+    if (savedVisuals) {
+        try {
+            const parsed = JSON.parse(savedVisuals);
+            if (parsed.mindmap) setCurrentMindmap(parsed.mindmap);
+            if (parsed.svg) setCurrentSvg(parsed.svg);
+        } catch (e) { console.error(e); }
+    }
+  }, []);
+
+  useEffect(() => {
+    const renderMindmap = async () => {
+        if (currentMindmap) {
+            const id = `mindmap-${Date.now()}`;
+            try {
+                const { svg } = await mermaid.render(id, currentMindmap);
+                setMindmapSvg(svg);
+            } catch (error) { setMindmapSvg('<div class="text-xs text-red-300">Map failed</div>'); }
+        } else { setMindmapSvg(''); }
+    };
+    renderMindmap();
+    if (currentMindmap || currentSvg) {
+        localStorage.setItem(STORAGE_KEY_VISUALS, JSON.stringify({ mindmap: currentMindmap, svg: currentSvg }));
+    }
+  }, [currentMindmap, currentSvg]);
+
+  useEffect(() => {
+      if (activeTab === 'map' && !currentMindmap && !isMapLoading && messages.length > 0) {
+          fetchMissingMindmap();
+      }
+  }, [activeTab]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(messages));
+  }, [messages]);
+
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+    if (messages.length === 0) {
+        setCurrentSvg(`<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="800" height="600" fill="#fcfcfc"/><text x="400" y="300" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="20" fill="#0369a1">Start Learning</text></svg>`);
+    }
+  }, []);
+
+  // --- LOGIC ---
+
+  const handleClearHistory = (e?: React.MouseEvent) => {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    setMessages([]);
+    localStorage.removeItem(STORAGE_KEY_HISTORY);
+    localStorage.removeItem(STORAGE_KEY_VISUALS);
+    
+    // Reset visuals
+    setCurrentMindmap(null);
+    setCurrentSvg(`<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="800" height="600" fill="#fcfcfc"/><text x="400" y="300" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="20" fill="#0369a1">Start Learning</text></svg>`);
+    
+    setLocalImage(null);
+    setLocalImageMime(null);
+    setShowTools(false);
+    
+    speak("History cleared.");
+  };
+
+  const fetchMissingMindmap = async () => {
+      setIsMapLoading(true);
+      const lastModelMessage = [...messages].reverse().find(m => m.role === 'model');
+      const contextToMap = activeTutorMemory || lastModelMessage?.text || contextMemory;
+      const history = messages.map(m => ({ role: m.role, text: m.text }));
+
+      if (contextToMap) {
+          const code = await generateMindmapOnly(contextToMap, history);
+          setCurrentMindmap(code);
+      }
+      setIsMapLoading(false);
+  };
+
+  const handleRegenerateVisual = async (customSuggestion?: string) => {
+      const lastModelMessageIndex = [...messages].reverse().findIndex(m => m.role === 'model');
+      if (lastModelMessageIndex === -1) return;
+      const realIndex = messages.length - 1 - lastModelMessageIndex;
+      const explanationText = messages[realIndex].text;
+      
+      setIsRegeneratingVisual(true);
+      try {
+          const newSvg = await regenerateSVG(explanationText, customSuggestion);
+          setCurrentSvg(newSvg);
+          setMessages(prev => {
+              const updated = [...prev];
+              updated[realIndex] = { ...updated[realIndex], svg: newSvg };
+              return updated;
+          });
+      } catch (e) { console.error(e); } 
+      finally { setIsRegeneratingVisual(false); }
+  };
+
+  const handleAnimateVisual = async () => {
+      const lastModelMessageIndex = [...messages].reverse().findIndex(m => m.role === 'model');
+      if (lastModelMessageIndex === -1) return;
+      const realIndex = messages.length - 1 - lastModelMessageIndex;
+      const explanationText = messages[realIndex].text;
+
+      setIsAnimatingVisual(true);
+      try {
+          const animatedSvg = await generateAnimatedSVG(explanationText);
+          setCurrentSvg(animatedSvg);
+          setMessages(prev => {
+              const updated = [...prev];
+              updated[realIndex] = { ...updated[realIndex], svg: animatedSvg };
+              return updated;
+          });
+      } catch (e) { console.error(e); } 
+      finally { setIsAnimatingVisual(false); }
+  };
+
+  const openReloadModal = () => {
+      setIsReloadModalOpen(true);
+      setReloadStep('ask');
+      setReloadSuggestion('');
+  };
+
+  const confirmReload = (shouldCustomize: boolean) => {
+      if (shouldCustomize) {
+          setReloadStep('input');
+      } else {
+          handleRegenerateVisual();
+          setIsReloadModalOpen(false);
+      }
+  };
+
+  const submitReloadWithSuggestion = () => {
+      handleRegenerateVisual(reloadSuggestion);
+      setIsReloadModalOpen(false);
+  };
+
+  const handleStopGeneration = () => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+      }
+      setIsLoading(false);
+      stopSpeaking();
+  };
+
+  const handleSendMessage = async (text: string, isInitial = false) => {
+    if ((!text.trim() && !isInitial) || isLoading) return;
+
+    handleStopGeneration();
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
+    const userMsg: ChatMessage = { role: 'user', text };
+    if (!isInitial) setMessages(prev => [...prev, userMsg]);
+    
+    setInput('');
+    const imageToSend = localImage;
+    const mimeToSend = localImageMime;
+    setLocalImage(null);
+    setLocalImageMime(null);
+
+    setIsLoading(true); 
+    stopSpeaking(); 
+    if (recognitionRef.current) recognitionRef.current.abort();
+    setCurrentMindmap(null);
+
+    try {
+      const history = messages.map(m => ({ role: m.role, text: m.text }));
+      // Pass isQuickMode
+      const response: TutorResponse = await generateTutorResponse(
+          text, history, contextMemory, imageToSend, mimeToSend, localMemory || null, isQuickMode
+      );
+
+      if (ac.signal.aborted) return;
+      
+      // If we got an SVG (Quick Mode = null), update it. If not, keep previous or ignore.
+      if (response.svg_code) {
+          setCurrentSvg(response.svg_code);
+      }
+      
+      const speechText = response.speech_response + (response.question ? `\n\n${response.question}` : '');
+      const modelMsg: ChatMessage = {
+        role: 'model',
+        text: speechText,
+        mindmap: null, 
+        svg: response.svg_code || undefined // Maintain types
+      };
+
+      setMessages(prev => [...prev, modelMsg]);
+      speak(speechText, restartLiveListeningIfActive);
+
+    } catch (err) {
+      if (ac.signal.aborted) return;
+      console.error(err);
+      restartLiveListeningIfActive(); // Restart listening on error if active
+    } finally {
+      if (!ac.signal.aborted) setIsLoading(false);
+    }
+  };
+
+  // Assign the ref so hooks can access it
+  useEffect(() => {
+    sendMessageRef.current = handleSendMessage;
+  }, [handleSendMessage, isQuickMode]); // Add isQuickMode dep
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setShowTools(false);
+      try {
+        const { base64, mime } = await resizeImage(e.target.files[0]);
+        setLocalImage(base64);
+        setLocalImageMime(mime);
+        speak("Image attached. Ask a question about it.");
+      } catch (err) { console.error(err); }
+    }
+  };
+
+  // --- RENDER ---
+  return (
+    <div className="flex flex-col h-full w-full bg-stone-50 relative">
+      <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
+
+      <div className="flex-1 w-full grid-pattern overflow-hidden relative pt-24 px-6 pb-6 flex flex-col">
+        {isQuizActive && quizData ? (
+             <div className="w-full h-full flex items-center justify-center">
+                 <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-stone-200 p-8 animate-fade-in flex flex-col z-10">
+                     <div className="flex justify-between items-center mb-6">
+                         <h2 className="text-2xl font-bold text-stone-800">Quiz: {quizData.topic}</h2>
+                         <span className="text-stone-400 font-medium">Q{currentQuestionIndex + 1} of {quizData.questions.length}</span>
+                     </div>
+                     <p className="text-xl text-stone-700 mb-8 font-medium leading-relaxed">{quizData.questions[currentQuestionIndex].question}</p>
+                     <div className="grid grid-cols-1 gap-3 mb-6">
+                         {quizData.questions[currentQuestionIndex].options.map((opt, idx) => {
+                             let btnClass = "p-4 text-left rounded-xl border-2 transition-all font-medium ";
+                             if (isAnswerRevealed) {
+                                 if (idx === quizData.questions[currentQuestionIndex].correctAnswerIndex) btnClass += "border-green-500 bg-green-50 text-green-800";
+                                 else if (idx === selectedOption) btnClass += "border-red-500 bg-red-50 text-red-800";
+                                 else btnClass += "border-stone-100 text-stone-400";
+                             } else btnClass += "border-stone-100 hover:border-blue-500 hover:bg-blue-50 text-stone-600";
+                             
+                             return (
+                                 <button key={idx} onClick={() => handleOptionSelect(idx)} disabled={isAnswerRevealed} className={btnClass}>
+                                     <div className="flex items-center justify-between">
+                                         <span>{opt}</span>
+                                         {isAnswerRevealed && idx === quizData.questions[currentQuestionIndex].correctAnswerIndex && <CheckCircle className="text-green-500" size={20}/>}
+                                         {isAnswerRevealed && idx === selectedOption && idx !== quizData.questions[currentQuestionIndex].correctAnswerIndex && <XCircle className="text-red-500" size={20}/>}
+                                     </div>
+                                 </button>
+                             )
+                         })}
+                     </div>
+                     {isAnswerRevealed && (
+                         <div className="flex justify-between items-center mt-4">
+                            <p className="text-stone-600 text-sm italic mr-4 flex-1">{quizData.questions[currentQuestionIndex].explanation}</p>
+                             <div className="flex items-center gap-2 shrink-0">
+                                 <button onClick={() => speak(quizData.questions[currentQuestionIndex].explanation)} className="p-2 rounded-full text-stone-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Volume2 size={20} /></button>
+                                 <button onClick={handleNextQuestion} className="flex items-center gap-2 px-6 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-700 transition-colors">
+                                     {currentQuestionIndex < quizData.questions.length - 1 ? 'Next' : 'Finish'} <ArrowRight size={16} />
+                                 </button>
+                             </div>
+                         </div>
+                     )}
+                 </div>
+             </div>
+        ) : (
+            <div className="flex flex-col w-full h-full bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden relative">
+                {/* Visual Tabs & Actions */}
+                <div className="absolute top-4 left-4 z-10 flex gap-2">
+                    <div className="flex bg-stone-100/80 backdrop-blur-sm p-1 rounded-lg border border-stone-200/50">
+                        <button onClick={() => setActiveTab('illustration')} className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-2 transition-all ${activeTab === 'illustration' ? 'bg-white text-stone-800 shadow-sm border border-stone-200/50' : 'text-stone-400 hover:text-stone-600 hover:bg-stone-200/50'}`}><ImageIcon size={14} /> Illustration</button>
+                        <button onClick={() => setActiveTab('map')} className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-2 transition-all ${activeTab === 'map' ? 'bg-white text-stone-800 shadow-sm border border-stone-200/50' : 'text-stone-400 hover:text-stone-600 hover:bg-stone-200/50'}`}><Network size={14} /> Concept Map</button>
+                    </div>
+                    <button onClick={() => { setMemoryEditText(localMemory); setIsMemoryEditorOpen(true); }} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-colors ${localMemory && localMemory.trim().length > 0 ? 'bg-purple-50 text-purple-600 border-purple-100 hover:bg-purple-100' : 'bg-white text-stone-500 border-stone-200 hover:bg-stone-50'}`}><BrainCircuit size={16} /><span className="text-xs font-bold uppercase tracking-wide">Memory</span></button>
+                    <div className="relative">
+                        <button onClick={openReloadModal} disabled={isRegeneratingVisual || isLoading} className={`flex items-center justify-center w-8 h-8 rounded-lg border shadow-sm transition-colors ${isRegeneratingVisual ? 'bg-blue-50 border-blue-200 text-blue-500' : 'bg-white border-stone-200 text-stone-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50'}`}><RefreshCw size={14} className={isRegeneratingVisual ? "animate-spin" : ""} /></button>
+                        {isReloadModalOpen && (
+                            <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-stone-200 p-4 z-50 animate-fade-in origin-top-left">
+                                {reloadStep === 'ask' ? (
+                                    <div className="flex flex-col gap-3">
+                                        <div className="flex items-start justify-between"><p className="text-sm font-semibold text-stone-800">Suggestion?</p><button onClick={() => setIsReloadModalOpen(false)}><X size={14} /></button></div>
+                                        <div className="flex gap-2 mt-1"><button onClick={() => confirmReload(true)} className="flex-1 bg-blue-600 text-white text-xs py-2 rounded-lg">Yes</button><button onClick={() => confirmReload(false)} className="flex-1 bg-stone-100 text-stone-600 text-xs py-2 rounded-lg">No</button></div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                         <div className="flex items-center justify-between"><span className="text-xs font-bold text-stone-500 uppercase">Customize Visual</span><button onClick={() => setIsReloadModalOpen(false)}><X size={14} /></button></div>
+                                        <textarea value={reloadSuggestion} onChange={(e) => setReloadSuggestion(e.target.value)} className="w-full h-20 p-2 text-sm border border-stone-200 rounded-lg bg-stone-50" placeholder="e.g. 'Make it simpler', 'Add arrows'" autoFocus />
+                                        
+                                        <div className="flex flex-wrap gap-2">
+                                            {['Simplify', 'Add Labels', 'Step-by-Step', 'High Contrast'].map(tag => (
+                                                <button key={tag} onClick={() => setReloadSuggestion(tag)} className="px-2 py-1 text-[10px] font-medium bg-stone-100 text-stone-500 rounded hover:bg-stone-200 border border-stone-200 transition-colors">
+                                                    {tag}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        
+                                        <button onClick={submitReloadWithSuggestion} className="w-full bg-blue-600 text-white text-xs py-2 rounded-lg flex items-center justify-center gap-2 mt-1"><Wand2 size={12} /> Generate Custom</button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <button onClick={handleAnimateVisual} disabled={isAnimatingVisual || isLoading || !currentSvg} className={`flex items-center justify-center w-8 h-8 rounded-lg border shadow-sm transition-colors ml-4 ${isAnimatingVisual ? 'bg-purple-50 border-purple-200 text-purple-500' : 'bg-white border-stone-200 text-stone-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50'}`}><Play size={14} className={isAnimatingVisual ? "animate-pulse" : ""} fill={isAnimatingVisual ? "currentColor" : "none"} /></button>
+                </div>
+
+                {/* Content Area */}
+                <div className="flex-1 relative bg-white pt-16 flex flex-col min-h-0"> 
+                    {activeTab === 'illustration' ? (
+                         isRegeneratingVisual ? <div className="flex flex-col items-center justify-center h-full gap-3 text-stone-400"><Loader className="animate-spin text-blue-500" size={32} /><span className="text-sm font-medium">Re-drawing diagram...</span></div>
+                         : isAnimatingVisual ? <div className="flex flex-col items-center justify-center h-full gap-3 text-stone-400"><Loader className="animate-spin text-purple-500" size={32} /><span className="text-sm font-medium">Animating...</span></div>
+                         : currentSvg ? <div key={currentSvg.length} className="w-full h-full flex overflow-auto p-4 animate-fade-in svg-container [&>svg]:m-auto [&>svg]:max-w-none" dangerouslySetInnerHTML={{ __html: currentSvg }} />
+                         : <div className="h-full text-stone-300 text-sm flex flex-col items-center justify-center gap-2"><ImageIcon size={32} /><span>No illustration available</span></div>
+                    ) : (
+                        isMapLoading ? <div className="flex flex-col items-center justify-center h-full gap-3 text-stone-400"><Loader className="animate-spin text-blue-500" size={32} /><span className="text-sm font-medium">Generating Concept Map...</span></div>
+                        : currentMindmap ? <div className="mermaid w-full h-full flex overflow-auto p-4 animate-fade-in [&>svg]:m-auto [&>svg]:max-w-none" dangerouslySetInnerHTML={{ __html: mindmapSvg }} />
+                        : <div className="h-full text-stone-300 text-sm flex flex-col items-center justify-center gap-2"><Network size={32} /><span>No map data available</span>{messages.length > 0 && <button onClick={fetchMissingMindmap} className="mt-2 text-blue-500 hover:underline text-xs">Generate Map</button>}</div>
+                    )}
+                </div>
+            </div>
+        )}
+      </div>
+
+      {/* Memory Editor Modal */}
+      {isMemoryEditorOpen && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-6 animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-2xl border border-stone-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
+                  <div className="p-4 border-b border-stone-100 flex justify-between items-center bg-stone-50"><div className="flex items-center gap-2 text-purple-700"><BrainCircuit size={20} /><h3 className="font-bold">Active Learning Memory</h3></div><button onClick={() => setIsMemoryEditorOpen(false)}><X size={20} /></button></div>
+                  <div className="p-4 flex-1 overflow-hidden bg-white">
+                      <textarea 
+                          value={memoryEditText} 
+                          onChange={(e) => setMemoryEditText(e.target.value)} 
+                          className="w-full h-64 p-3 border border-stone-600 rounded-lg resize-none text-sm bg-stone-600 text-white placeholder-stone-300 font-mono" 
+                          placeholder="Enter concepts to focus on..." 
+                      />
+                  </div>
+                  <div className="p-4 border-t border-stone-100 flex justify-end gap-2 bg-stone-50"><button onClick={() => setIsMemoryEditorOpen(false)} className="px-4 py-2 text-stone-500 hover:bg-stone-200 rounded-lg text-sm font-medium">Cancel</button><button onClick={() => { setLocalMemory(memoryEditText); setIsMemoryEditorOpen(false); speak("Memory updated."); }} className="px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg text-sm font-medium flex items-center gap-2"><Save size={16} /> Save Memory</button></div>
+              </div>
+          </div>
+      )}
+
+      {/* Bottom Chat Bar */}
+      <div className="h-auto bg-white border-t border-stone-200 flex flex-col shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative z-30">
+         {localImage && <div className="px-6 pt-3 flex items-center gap-2 animate-fade-in"><div className="relative group"><img src={`data:${localImageMime};base64,${localImage}`} alt="Upload" className="h-16 w-16 object-cover rounded-lg border border-stone-200 shadow-sm" /><button onClick={() => { setLocalImage(null); setLocalImageMime(null); }} className="absolute -top-2 -right-2 bg-stone-800 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X size={12} /></button></div><span className="text-xs text-blue-500 font-medium">Image attached</span></div>}
+         <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-80 min-h-0 scroll-smooth">
+            {messages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.role === 'model' ? (
+                        <div className="flex items-start gap-2 max-w-[85%]"><div className="p-4 rounded-2xl text-sm bg-blue-50 text-blue-900 rounded-bl-none border border-blue-100 shadow-sm"><SimpleMarkdown text={msg.text} /></div><button onClick={() => speak(msg.text, restartLiveListeningIfActive)} className="mt-1 p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Volume2 size={16} /></button></div>
+                    ) : ( <div className="max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed bg-stone-100 text-stone-800 rounded-br-none shadow-sm">{msg.text}</div> )}
+                </div>
+            ))}
+             {isLoading && <div className="text-xs text-stone-400 px-6 animate-pulse">Tutor is thinking...</div>}
+            <div ref={messagesEndRef} />
+         </div>
+
+         <div className="px-6 pb-2 bg-white text-center">
+            {isQuickMode && !isQuizActive ? (
+                <p className="text-xs text-amber-600 font-bold animate-pulse">Running in Quick Answer Mode (Text Only)</p>
+            ) : liveMode === 'active' ? (
+                <p className="text-xs text-green-600 font-bold animate-pulse">Live: Listening... Say "Pass" to pause, "Stop" to end.</p>
+            ) : liveMode === 'standby' ? (
+                <p className="text-xs text-amber-500 font-bold">Live: Standby. Say "Start" to resume.</p>
+            ) : (
+                <p className="text-xs text-blue-400/80 font-medium">Try to draw the diagram and structure the map to understand the concept better.</p>
+            )}
+         </div>
+
+         <div className="p-4 border-t border-stone-100 flex gap-2 items-center bg-white">
+            <div className="relative">
+                {showTools && (
+                    <div className="absolute bottom-full left-0 mb-3 flex flex-col gap-2 bg-white p-1.5 rounded-full shadow-xl border border-stone-200 animate-fade-in z-50 min-w-[3rem] items-center">
+                        <button onClick={() => fileInputRef.current?.click()} disabled={isLoading || isQuizActive || liveMode !== 'off'} className="p-3 rounded-full text-stone-400 hover:bg-blue-50 hover:text-blue-600 transition-all"><ImageIcon size={20} /></button>
+                        <button onClick={() => startQuiz(messages)} disabled={isLoading || isQuizActive || liveMode !== 'off'} className="p-3 rounded-full hover:bg-purple-50 text-stone-400 hover:text-purple-600 transition-all"><Brain size={20} /></button>
+                        <button onClick={toggleLiveMode} disabled={isQuizActive} className={`p-3 rounded-full transition-all ${liveMode === 'active' ? 'bg-green-100 text-green-700 animate-pulse ring-2 ring-green-400' : liveMode === 'standby' ? 'bg-amber-100 text-amber-700 ring-2 ring-amber-400' : 'text-stone-400 hover:bg-stone-50'}`}><Headphones size={20} /></button>
+                        
+                        {/* New Quick Answer Button */}
+                        <button 
+                            onClick={() => setIsQuickMode(!isQuickMode)} 
+                            disabled={isLoading || isQuizActive || liveMode !== 'off'} 
+                            className={`p-3 rounded-full transition-all ${isQuickMode ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400' : 'text-stone-400 hover:bg-yellow-50 hover:text-yellow-600'}`} 
+                            title="Quick Answer Mode (Text Only)"
+                        >
+                            <span className="text-lg leading-none">🏃</span>
+                        </button>
+                        
+                        <button onClick={(e) => handleClearHistory(e)} disabled={isLoading || isQuizActive || liveMode !== 'off'} className="p-3 rounded-full text-stone-400 hover:bg-red-50 hover:text-red-600 transition-all" title="Clear History"><Trash2 size={20} /></button>
+                    </div>
+                )}
+                <button onClick={() => setShowTools(!showTools)} className="p-3 rounded-full text-stone-400 hover:bg-stone-100 transition-all">{showTools ? <X size={20} /> : <Plus size={20} />}</button>
+            </div>
+            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(input)} placeholder={isQuizActive ? "Quiz Active..." : (liveMode !== 'off' ? "Live Mode Active..." : (isQuickMode ? "Ask for a quick answer..." : "Ask the tutor..."))} disabled={isListening || isQuizActive || (liveMode !== 'off' && !isLoading)} className="flex-1 bg-stone-50 border-transparent focus:bg-white focus:border-stone-200 focus:ring-0 rounded-full px-6 py-3 text-sm transition-all shadow-inner" />
+            <button onClick={() => handleSendMessage("I am ready. Ask me a question.")} disabled={isQuizActive || isLoading || liveMode !== 'off'} className="p-3 rounded-full text-stone-400 hover:bg-purple-50 hover:text-purple-600 transition-all"><MessageCircleQuestion size={20} /></button>
+            <button onClick={() => toggleManualMic(input, setInput)} disabled={isQuizActive} className={`p-3 rounded-full transition-all ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-stone-400 hover:bg-stone-50'}`}>{isListening ? <MicOff size={20} /> : <Mic size={20} />}</button>
+            <button onClick={isLoading ? handleStopGeneration : () => handleSendMessage(input)} disabled={isQuizActive || (liveMode !== 'off' && !isLoading) || (!input.trim() && !isLoading)} className={`p-3 rounded-full text-white transition-all shadow-md ${isLoading ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50'}`}>{isLoading ? <Square size={18} fill="currentColor" /> : <Send size={18} />}</button>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+export default TutorView;
