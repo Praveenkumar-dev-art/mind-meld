@@ -11,10 +11,6 @@ const App: React.FC = () => {
   const [diaryText, setDiaryText] = useState('');
   const [diaryImage, setDiaryImage] = useState<string | null>(null);
   const [diaryImageMime, setDiaryImageMime] = useState<string | null>(null);
-  
-  // Persist structured output so it doesn't regenerate on mode switch
-  const [diarySummary, setDiarySummary] = useState('');
-  const [diaryInsight, setDiaryInsight] = useState<string | null>(null);
 
   // Focused Learning Memory (Transferred from Diary via Rocket)
   const [tutorMemory, setTutorMemory] = useState<string | null>(null);
@@ -34,10 +30,6 @@ const App: React.FC = () => {
               setDiaryImage(img);
               setDiaryImageMime(mime);
             }}
-            summary={diarySummary}
-            insight={diaryInsight}
-            onUpdateSummary={setDiarySummary}
-            onUpdateInsight={setDiaryInsight}
             onSendToTutor={(text) => {
               setTutorMemory(text);
               // Automatic navigation removed as per user request

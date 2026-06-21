@@ -18,6 +18,7 @@ export interface ChatMessage {
   text: string;
   mindmap?: string | null;
   svg?: string | null; // Changed to nullable
+  id?: number;
 }
 
 export interface GeminiConfig {

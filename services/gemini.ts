@@ -56,7 +56,7 @@ export const generateDiarySummary = async (
     mimeType?: string | null
 ): Promise<{ summary: string; insight: string | null }> => {
   const ai = getClient();
-  const primaryModel = "gemini-3-pro-preview"; 
+  const primaryModel = "gemini-3.1-pro-preview"; 
 
   const prompt = [
     "You are 'The Silent Friend', a supportive and passive AI in Diary Mode.",
@@ -116,10 +116,11 @@ export const generateTutorResponse = async (
   contextImage?: string | null,
   contextImageMime?: string | null,
   activeTutorMemory?: string | null,
-  isQuickMode: boolean = false
+  isQuickMode: boolean = false,
+  isWebSearchMode: boolean = false
 ): Promise<TutorResponse> => {
   const ai = getClient();
-  const primaryModel = "gemini-3-pro-preview";
+  const primaryModel = "gemini-3.1-pro-preview";
 
   let systemInstructionLines: string[] = [];
 
@@ -127,6 +128,7 @@ export const generateTutorResponse = async (
     systemInstructionLines = [
       "You are 'The Socratic Teacher' in QUICK ANSWER MODE.",
       "Goal: Provide a fast, text-only response.",
+      ...(isWebSearchMode ? ["IMPORTANT: Perform a web search to gather up-to-date facts before answering."] : []),
       "",
       "Instructions:",
       "1. Answer the user's question directly and concisely.",
@@ -138,6 +140,7 @@ export const generateTutorResponse = async (
     systemInstructionLines = [
       "You are 'The Socratic Teacher' in Tutor Mode.",
       "Goal: Teach using Sweller's Cognitive Load Theory (Worked Examples -> Scaffolding -> Fading).",
+      ...(isWebSearchMode ? ["IMPORTANT: Perform a web search to gather up-to-date facts before answering and incorporate the real-world data into your response."] : []),
       ""
     ];
 
@@ -214,7 +217,7 @@ export const generateTutorResponse = async (
   });
 
   try {
-    const response = await generateWithFallback(ai, primaryModel, {
+    const options: any = {
       contents: contents,
       config: {
         systemInstruction: systemInstruction,
@@ -223,14 +226,20 @@ export const generateTutorResponse = async (
           type: Type.OBJECT,
           properties: {
             svg_code: { type: Type.STRING, nullable: true, description: "Raw SVG XML string. Null in Quick Mode." },
-            speech_response: { type: Type.STRING, description: "The verbal explanation." },
+            speech_response: { type: Type.STRING, description: "The verbal explanation. Analyze and include web search facts if enabled." },
             question: { type: Type.STRING, nullable: true, description: "A specific follow-up question, ONLY if requested." },
             scaffolding_state: { type: Type.STRING, enum: ["example", "problem", "fading"] }
           },
           required: isQuickMode ? ["speech_response"] : ["svg_code", "speech_response", "scaffolding_state"]
         }
       },
-    });
+    };
+
+    if (isWebSearchMode) {
+      options.config.tools = [{ googleSearch: {} }];
+    }
+
+    const response = await generateWithFallback(ai, primaryModel, options);
 
     const text = response.text;
     if (!text) throw new Error("No response from Gemini");
@@ -249,7 +258,7 @@ export const generateTutorResponse = async (
 
 export const regenerateSVG = async (explanationText: string, userSuggestion?: string): Promise<string> => {
     const ai = getClient();
-    const primaryModel = "gemini-3-pro-preview"; 
+    const primaryModel = "gemini-3.1-pro-preview"; 
 
     const promptLines = [
         "You are a Master Scientific Illustrator and Pedagogical Designer.",
@@ -305,7 +314,7 @@ export const regenerateSVG = async (explanationText: string, userSuggestion?: st
 
 export const generateAnimatedSVG = async (explanationText: string): Promise<string> => {
     const ai = getClient();
-    const primaryModel = "gemini-3-pro-preview"; 
+    const primaryModel = "gemini-3.1-pro-preview"; 
 
     const prompt = [
         "You are an Expert Motion Graphics Designer for Educational Content.",
@@ -363,7 +372,7 @@ export const generateMindmapOnly = async (
     history: {role: string, text: string}[]
 ): Promise<string> => {
     const ai = getClient();
-    const primaryModel = "gemini-3-pro-preview"; 
+    const primaryModel = "gemini-3.1-pro-preview"; 
 
     const recentDiscussion = history.slice(-2).map(m => m.text).join(" ");
     
@@ -413,7 +422,7 @@ export const generateQuiz = async (
   history: {role: string, text: string}[]
 ): Promise<QuizData> => {
   const ai = getClient();
-  const primaryModel = "gemini-3-pro-preview";
+  const primaryModel = "gemini-3.1-pro-preview";
 
   const recentHistory = history.slice(-3).map(m => m.text).join(" ");
   const combinedContext = "Main Topic: " + contextMemory + ". Recent Discussion: " + recentHistory;
