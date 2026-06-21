@@ -120,7 +120,7 @@ const DiaryView: React.FC<DiaryViewProps> = ({
   return (
     <div className="flex h-full w-full">
       {/* Raw Input (Full Width) */}
-      <div className="w-full h-full flex flex-col bg-white pt-28 pb-8 px-8 relative group">
+      <div className="w-full h-full flex flex-col bg-white pt-20 pb-8 px-8 lg:px-16 xl:px-32 relative group">
         <div className="flex justify-between items-center mb-6 shrink-0">
           <span className="text-xs font-bold text-stone-400 tracking-widest uppercase flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-stone-300 group-hover:bg-blue-400 transition-colors"></div>

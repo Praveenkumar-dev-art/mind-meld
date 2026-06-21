@@ -2,9 +2,19 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { TutorResponse, QuizData } from '../types';
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  const localKey = typeof window !== 'undefined' ? localStorage.getItem('MINDMELD_USER_API_KEY') : null;
+  const envKey = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY)
+    || process.env.VITE_GEMINI_API_KEY
+    || process.env.API_KEY
+    || process.env.GEMINI_API_KEY;
+    
+    
+  const apiKey = localKey || envKey;
   if (!apiKey) {
-    throw new Error("API Key not found");
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('open-api-key-modal'));
+    }
+    throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -38,8 +48,20 @@ const generateWithFallback = async (
                         (error.message && error.message.includes('429')) ||
                         (error.message && error.message.includes('RESOURCE_EXHAUSTED'));
 
-    if (isRateLimit && modelName !== "gemini-2.5-flash") {
-      console.warn(`Gemini 429 Quota Exceeded for ${modelName}. Falling back to gemini-2.5-flash.`);
+    const isModelNotFound = error.status === 404 || 
+                            (error.message && error.message.includes('not found'));
+
+    const isInvalidKey = error.status === 400 || error.status === 403 || (error.message && error.message.toLowerCase().includes('key'));
+    
+    if (isInvalidKey) {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('open-api-key-modal', { detail: { error: 'Invalid API Key. Please check your key and try again.' } }));
+        }
+        throw new Error("INVALID_API_KEY");
+    }
+
+    if ((isRateLimit || isModelNotFound) && modelName !== "gemini-2.5-flash") {
+      console.warn(`Gemini Error (${error.status}) for ${modelName}. Falling back to gemini-2.5-flash.`);
       return await ai.models.generateContent({
         ...params,
         model: "gemini-2.5-flash"
@@ -56,7 +78,7 @@ export const generateDiarySummary = async (
     mimeType?: string | null
 ): Promise<{ summary: string; insight: string | null }> => {
   const ai = getClient();
-  const primaryModel = "gemini-3.1-pro-preview"; 
+  const primaryModel = "gemini-2.5-flash"; 
 
   const prompt = [
     "You are 'The Silent Friend', a supportive and passive AI in Diary Mode.",
@@ -120,7 +142,7 @@ export const generateTutorResponse = async (
   isWebSearchMode: boolean = false
 ): Promise<TutorResponse> => {
   const ai = getClient();
-  const primaryModel = "gemini-3.1-pro-preview";
+  const primaryModel = "gemini-2.5-flash";
 
   let systemInstructionLines: string[] = [];
 
@@ -258,7 +280,7 @@ export const generateTutorResponse = async (
 
 export const regenerateSVG = async (explanationText: string, userSuggestion?: string): Promise<string> => {
     const ai = getClient();
-    const primaryModel = "gemini-3.1-pro-preview"; 
+    const primaryModel = "gemini-2.5-pro"; 
 
     const promptLines = [
         "You are a Master Scientific Illustrator and Pedagogical Designer.",
@@ -314,7 +336,7 @@ export const regenerateSVG = async (explanationText: string, userSuggestion?: st
 
 export const generateAnimatedSVG = async (explanationText: string): Promise<string> => {
     const ai = getClient();
-    const primaryModel = "gemini-3.1-pro-preview"; 
+    const primaryModel = "gemini-2.5-pro"; 
 
     const prompt = [
         "You are an Expert Motion Graphics Designer for Educational Content.",
@@ -372,7 +394,7 @@ export const generateMindmapOnly = async (
     history: {role: string, text: string}[]
 ): Promise<string> => {
     const ai = getClient();
-    const primaryModel = "gemini-3.1-pro-preview"; 
+    const primaryModel = "gemini-2.5-flash"; 
 
     const recentDiscussion = history.slice(-2).map(m => m.text).join(" ");
     
@@ -422,7 +444,7 @@ export const generateQuiz = async (
   history: {role: string, text: string}[]
 ): Promise<QuizData> => {
   const ai = getClient();
-  const primaryModel = "gemini-3.1-pro-preview";
+  const primaryModel = "gemini-2.5-pro";
 
   const recentHistory = history.slice(-3).map(m => m.text).join(" ");
   const combinedContext = "Main Topic: " + contextMemory + ". Recent Discussion: " + recentHistory;

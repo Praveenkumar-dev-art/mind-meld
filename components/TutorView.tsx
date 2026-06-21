@@ -90,6 +90,11 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
   const [isAnimatingVisual, setIsAnimatingVisual] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [splitPercentage, setSplitPercentage] = useState(60);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isRopeVisible, setIsRopeVisible] = useState(false);
+  const ropeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   const [isReloadModalOpen, setIsReloadModalOpen] = useState(false);
   const [reloadStep, setReloadStep] = useState<'ask' | 'input'>('ask');
@@ -221,6 +226,102 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
     if (hasInitialized.current) return;
     hasInitialized.current = true;
   }, []);
+
+  // --- DRAG TO RESIZE LOGIC ---
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+      setIsDragging(true);
+      document.body.style.userSelect = 'none'; // Prevent text selection
+  };
+
+  useEffect(() => {
+      const handleDrag = (e: MouseEvent | TouchEvent) => {
+          if (!isDragging || !containerRef.current) return;
+          
+          let clientY = 0;
+          if (e instanceof MouseEvent) {
+              clientY = e.clientY;
+          } else if (e instanceof TouchEvent) {
+              clientY = e.touches[0].clientY;
+          }
+
+          const containerRect = containerRef.current.getBoundingClientRect();
+          const topOffset = 80; 
+          const availableHeight = containerRect.height - topOffset;
+          
+          let newPercentage = ((clientY - containerRect.top - topOffset) / availableHeight) * 100;
+
+          if (newPercentage <= 10) {
+             newPercentage = 0;
+             setIsRopeVisible(true);
+          } else if (newPercentage >= 90) {
+             newPercentage = 100;
+             setIsRopeVisible(true);
+          } else {
+             newPercentage = Math.max(0, Math.min(100, newPercentage));
+             setIsRopeVisible(false);
+          }
+
+          setSplitPercentage(newPercentage);
+      };
+
+      const handleDragEnd = () => {
+          if (isDragging) {
+              setIsDragging(false);
+              document.body.style.userSelect = 'auto';
+          }
+      };
+
+      if (isDragging) {
+          window.addEventListener('mousemove', handleDrag);
+          window.addEventListener('mouseup', handleDragEnd);
+          window.addEventListener('touchmove', handleDrag, { passive: false });
+          window.addEventListener('touchend', handleDragEnd);
+      }
+
+      return () => {
+          window.removeEventListener('mousemove', handleDrag);
+          window.removeEventListener('mouseup', handleDragEnd);
+          window.removeEventListener('touchmove', handleDrag);
+          window.removeEventListener('touchend', handleDragEnd);
+      };
+  }, [isDragging]);
+
+  // --- AUTO-HIDE ROPE HOVER LOGIC ---
+  useEffect(() => {
+      const handleGlobalMouseMove = (e: MouseEvent) => {
+          if (!containerRef.current || isExpanded || isDragging) return;
+          
+          if (splitPercentage !== 0 && splitPercentage !== 100) return;
+
+          const containerRect = containerRef.current.getBoundingClientRect();
+          const clientY = e.clientY;
+          
+          const relativeY = clientY - containerRect.top;
+          const containerHeight = containerRect.height;
+          
+          let isInTriggerZone = false;
+          if (splitPercentage === 0 && relativeY < containerHeight * 0.15) {
+              isInTriggerZone = true;
+          } else if (splitPercentage === 100 && relativeY > containerHeight * 0.85) {
+              isInTriggerZone = true;
+          }
+
+          if (isInTriggerZone) {
+              setIsRopeVisible(true);
+              if (ropeTimeoutRef.current) clearTimeout(ropeTimeoutRef.current);
+              
+              ropeTimeoutRef.current = setTimeout(() => {
+                  setIsRopeVisible(false);
+              }, 2000);
+          }
+      };
+
+      window.addEventListener('mousemove', handleGlobalMouseMove);
+      return () => {
+          window.removeEventListener('mousemove', handleGlobalMouseMove);
+          if (ropeTimeoutRef.current) clearTimeout(ropeTimeoutRef.current);
+      };
+  }, [splitPercentage, isExpanded, isDragging]);
 
   // --- LOGIC ---
 
@@ -416,10 +517,14 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
 
   // --- RENDER ---
   return (
-    <div className="flex flex-col h-full w-full bg-stone-50 relative">
+    <div ref={containerRef} className="flex flex-col h-full w-full bg-stone-50 relative">
       <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
 
-      <div className={`flex-1 w-full grid-pattern overflow-hidden relative transition-all duration-300 flex flex-col ${isExpanded ? 'pt-6 px-6 pb-6' : 'pt-24 px-6 pb-6'}`}>
+      {/* TOP VISUAL STAGE */}
+      <div 
+        className={`w-full grid-pattern overflow-hidden relative transition-none flex flex-col ${isExpanded ? 'pt-16 px-6 pb-6 h-full' : 'pt-20 px-6 pb-6'}`}
+        style={!isExpanded ? { height: `${splitPercentage}%`, display: splitPercentage === 0 ? 'none' : 'flex' } : {}}
+      >
         {isQuizActive && quizData ? (
              <div className="w-full h-full flex items-center justify-center">
                  <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-stone-200 p-8 animate-fade-in flex flex-col z-10">
@@ -539,13 +644,13 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
                                       <span className="text-xs font-semibold">{isCopied ? 'Copied HTML/SVG' : 'Copy SVG'}</span>
                                    </button>
                                 </div>
-                                <div key={currentSvg.length} className="w-full h-full flex overflow-auto p-4 animate-fade-in svg-container [&>svg]:m-auto [&>svg]:max-w-none" dangerouslySetInnerHTML={{ __html: currentSvg }} />
+                                <div key={currentSvg.length} className="w-full h-full flex items-center justify-center overflow-auto p-4 animate-fade-in svg-container [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: currentSvg }} />
                              </div>
                          )
                          : <div className="h-full text-stone-300 text-sm flex flex-col items-center justify-center gap-2"><ImageIcon size={32} /><span>No illustration available</span></div>
                     ) : (
                         isMapLoading ? <div className="flex flex-col items-center justify-center h-full gap-3 text-stone-400"><Loader className="animate-spin text-blue-500" size={32} /><span className="text-sm font-medium">Generating Concept Map...</span></div>
-                        : currentMindmap ? <div className="mermaid w-full h-full flex overflow-auto p-4 animate-fade-in [&>svg]:m-auto [&>svg]:max-w-none" dangerouslySetInnerHTML={{ __html: mindmapSvg }} />
+                        : currentMindmap ? <div className="mermaid w-full h-full flex items-start justify-center overflow-auto p-4 animate-fade-in [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: mindmapSvg }} />
                         : <div className="h-full text-stone-300 text-sm flex flex-col items-center justify-center gap-2"><Network size={32} /><span>No map data available</span>{messages.length > 0 && <button onClick={fetchMissingMindmap} className="mt-2 text-blue-500 hover:underline text-xs">Generate Map</button>}</div>
                     )}
                 </div>
@@ -562,7 +667,7 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
                       <textarea 
                           value={memoryEditText} 
                           onChange={(e) => setMemoryEditText(e.target.value)} 
-                          className="w-full h-64 p-3 border border-stone-600 rounded-lg resize-none text-sm bg-stone-600 text-white placeholder-stone-300 font-mono" 
+                          className="w-full h-64 p-3 border border-stone-300 rounded-lg resize-none text-sm bg-stone-50 text-stone-800 placeholder-stone-400 font-mono focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400" 
                           placeholder="Enter concepts to focus on..." 
                       />
                   </div>
@@ -571,10 +676,57 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
           </div>
       )}
 
+
+      {/* RESIZE DRAG HANDLE OR ROPE */}
+      {!isExpanded && splitPercentage > 0 && splitPercentage < 100 && (
+          <div 
+              className="w-full h-3 bg-stone-200 hover:bg-blue-400 active:bg-blue-500 cursor-row-resize flex items-center justify-center transition-colors z-40 relative group shrink-0"
+              onMouseDown={handleDragStart}
+              onTouchStart={handleDragStart}
+          >
+              <div className="w-10 h-1 rounded-full bg-stone-400 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </div>
+      )}
+
+      {/* TOP ROPE (Hanging Down) */}
+      {!isExpanded && splitPercentage === 0 && isRopeVisible && (
+          <div 
+              className="absolute top-0 left-1/2 -translate-x-1/2 z-50 cursor-row-resize pt-2 pb-6 px-4 animate-fade-in drop-shadow-md transition-opacity"
+              onMouseDown={handleDragStart}
+              onTouchStart={handleDragStart}
+          >
+              <svg width="24" height="60" viewBox="0 0 24 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 0C12 10 14 20 12 30C10 40 12 45 12 50" stroke="#a8a29e" strokeWidth="4" strokeLinecap="round" strokeDasharray="4 2" />
+                  <circle cx="12" cy="52" r="6" fill="#78716c" />
+                  <path d="M9 52L15 52M12 49L12 55" stroke="#fff" strokeWidth="1.5" />
+              </svg>
+          </div>
+      )}
+
+      {/* BOTTOM ROPE (Floating Up) */}
+      {!isExpanded && splitPercentage === 100 && isRopeVisible && (
+          <div 
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 z-50 cursor-row-resize pt-6 pb-2 px-4 animate-fade-in drop-shadow-md"
+              onMouseDown={handleDragStart}
+              onTouchStart={handleDragStart}
+              style={{ animation: 'bob 2s ease-in-out infinite' }}
+          >
+              <style>{`@keyframes bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -6px); } }`}</style>
+              <svg width="24" height="60" viewBox="0 0 24 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="8" r="6" fill="#78716c" />
+                  <path d="M9 8L15 8M12 5L12 11" stroke="#fff" strokeWidth="1.5" />
+                  <path d="M12 14C12 25 10 35 12 45C14 55 12 60 12 60" stroke="#a8a29e" strokeWidth="4" strokeLinecap="round" strokeDasharray="4 2" />
+              </svg>
+          </div>
+      )}
+
       {/* Bottom Chat Bar */}
-      <div className={`transition-all duration-300 origin-bottom ${isExpanded ? 'scale-y-0 h-0 opacity-0 overflow-hidden' : 'h-auto bg-white border-t border-stone-200 flex flex-col shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative z-30'}`}>
-         {localImage && <div className="px-6 pt-3 flex items-center gap-2 animate-fade-in"><div className="relative group"><img src={`data:${localImageMime};base64,${localImage}`} alt="Upload" className="h-16 w-16 object-cover rounded-lg border border-stone-200 shadow-sm" /><button onClick={() => { setLocalImage(null); setLocalImageMime(null); }} className="absolute -top-2 -right-2 bg-stone-800 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X size={12} /></button></div><span className="text-xs text-blue-500 font-medium">Image attached</span></div>}
-         <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-80 min-h-0 scroll-smooth">
+      <div 
+        className={`transition-none origin-bottom ${isExpanded ? 'hidden' : 'bg-white flex flex-col shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative z-30'}`}
+        style={!isExpanded ? { height: `${100 - splitPercentage}%`, display: splitPercentage === 100 ? 'none' : 'flex' } : {}}
+      >
+         {localImage && <div className="px-6 pt-3 flex items-center gap-2 animate-fade-in shrink-0"><div className="relative group"><img src={`data:${localImageMime};base64,${localImage}`} alt="Upload" className="h-16 w-16 object-cover rounded-lg border border-stone-200 shadow-sm" /><button onClick={() => { setLocalImage(null); setLocalImageMime(null); }} className="absolute -top-2 -right-2 bg-stone-800 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X size={12} /></button></div><span className="text-xs text-blue-500 font-medium">Image attached</span></div>}
+         <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 scroll-smooth">
             {messages.map((msg, idx) => (
                 <div 
                     key={idx} 

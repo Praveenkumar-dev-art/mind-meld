@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, GraduationCap } from 'lucide-react';
+import { BookOpen, GraduationCap, Key } from 'lucide-react';
 import { AppMode } from '../types';
 
 interface ModeToggleProps {
@@ -34,6 +34,13 @@ const ModeToggle: React.FC<ModeToggleProps> = ({ mode, setMode }) => {
           Tutor Mode
         </button>
       </div>
+      <button 
+        onClick={() => window.dispatchEvent(new Event('open-api-key-modal'))} 
+        className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-auto bg-white/90 p-2 rounded-full shadow-sm hover:bg-stone-100 text-stone-500 border border-stone-200 transition-colors"
+        title="Set API Key"
+      >
+        <Key size={16} />
+      </button>
     </div>
   );
 };
