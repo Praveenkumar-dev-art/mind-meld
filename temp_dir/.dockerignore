@@ -1,0 +1,28 @@
+# Dependencies — will be freshly installed inside the build stage via npm ci.
+node_modules/
+
+# Built output — will be freshly generated inside the build stage via npm run build.
+dist/
+
+# Secrets — NEVER include .env files in a Docker image.
+.env
+.env.*
+!.env.example
+
+# Git metadata — not needed inside the container.
+.git/
+.gitignore
+
+# Non-production folders — not needed for the build.
+F,F understanding/
+abstract/
+upgrade 2.0/
+
+# Editor and OS files.
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs.
+*.log
+npm-debug.log*

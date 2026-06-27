@@ -644,13 +644,13 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
                                       <span className="text-xs font-semibold">{isCopied ? 'Copied HTML/SVG' : 'Copy SVG'}</span>
                                    </button>
                                 </div>
-                                <div key={currentSvg.length} className="w-full h-full flex items-center justify-center overflow-auto p-4 animate-fade-in svg-container [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:h-auto [&>svg]:overflow-hidden" dangerouslySetInnerHTML={{ __html: currentSvg }} />
+                                <div key={currentSvg.length} className="w-full h-full flex items-center justify-center overflow-auto p-4 animate-fade-in svg-container [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: currentSvg }} />
                              </div>
                          )
                          : <div className="h-full text-stone-300 text-sm flex flex-col items-center justify-center gap-2"><ImageIcon size={32} /><span>No illustration available</span></div>
                     ) : (
                         isMapLoading ? <div className="flex flex-col items-center justify-center h-full gap-3 text-stone-400"><Loader className="animate-spin text-blue-500" size={32} /><span className="text-sm font-medium">Generating Concept Map...</span></div>
-                        : currentMindmap ? <div className="mermaid w-full h-full flex items-start justify-center overflow-auto p-4 animate-fade-in [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:h-auto [&>svg]:overflow-hidden" dangerouslySetInnerHTML={{ __html: mindmapSvg }} />
+                        : currentMindmap ? <div className="mermaid w-full h-full flex items-start justify-center overflow-auto p-4 animate-fade-in [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: mindmapSvg }} />
                         : <div className="h-full text-stone-300 text-sm flex flex-col items-center justify-center gap-2"><Network size={32} /><span>No map data available</span>{messages.length > 0 && <button onClick={fetchMissingMindmap} className="mt-2 text-blue-500 hover:underline text-xs">Generate Map</button>}</div>
                     )}
                 </div>

@@ -3,7 +3,10 @@ import { TutorResponse, QuizData } from '../types';
 
 const getClient = () => {
   const localKey = typeof window !== 'undefined' ? localStorage.getItem('MINDMELD_USER_API_KEY') : null;
-  const envKey = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  const envKey = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY)
+    || process.env.VITE_GEMINI_API_KEY
+    || process.env.API_KEY
+    || process.env.GEMINI_API_KEY;
     
     
   const apiKey = localKey || envKey;
@@ -189,7 +192,6 @@ export const generateTutorResponse = async (
       "Rules for VISUALS:",
       "1. 'svg_code': Create a rich, illustrative SVG diagram (XML string) to visualize the concept.",
       "   - ViewBox: \"0 0 800 600\".",
-      "   - BOUNDARY RULE: ALL elements MUST be strictly contained within the 0 to 800 (x) and 0 to 600 (y) coordinate space. Do NOT draw anything outside these coordinates (e.g. keep x between 20 and 780) to prevent clipping.",
       "   - Style: Use soft pastel colors, rounded corners, and clear labels. Make it look like a textbook diagram.",
       "   - Content: Draw the actual object/system (e.g., if explaining a heart, draw a heart shape; if a cycle, draw a cycle). NOT just boxes.",
       "   - STRICT ALIGNMENT RULES: All text elements MUST have 'text-anchor=\"middle\"' and 'dominant-baseline=\"middle\"' to be perfectly centered in their containers.",
@@ -307,7 +309,6 @@ export const regenerateSVG = async (explanationText: string, userSuggestion?: st
         "SVG Rules:",
         "- Return ONLY the raw XML string starting with <svg> and ending with </svg>.",
         "- ViewBox=\"0 0 800 600\".",
-        "- BOUNDARY RULE: ALL elements MUST be strictly contained within the 0 to 800 (x) and 0 to 600 (y) coordinate space. Keep x between 20 and 780 to prevent clipping.",
         "- Use professional styling: soft shadows, rounded strokes, clear sans-serif typography (Inter/Arial).",
         "- Ensure text is legible: use 'dominant-baseline=\"middle\"' and 'text-anchor=\"middle\"' for center alignment.",
         "- Do NOT simply draw boxes and arrows unless it's a flowchart. Draw the *actual* concept (e.g., a neuron, a gear system, a chemical bond) if possible using SVG shapes."
@@ -356,8 +357,7 @@ export const generateAnimatedSVG = async (explanationText: string): Promise<stri
         "",
         "SVG Requirements:",
         "- Return ONLY the raw XML string starting with <svg> and ending with </svg>.",
-        "- ViewBox=\"0 0 800 600\".",
-        "- BOUNDARY RULE: ALL elements MUST be strictly contained within the 0 to 800 (x) and 0 to 600 (y) coordinate space. Keep x between 20 and 780 to prevent clipping."
+        "- ViewBox=\"0 0 800 600\"."
     ].join("\n");
 
     try {
