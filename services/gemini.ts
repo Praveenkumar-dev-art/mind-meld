@@ -16,10 +16,17 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// HELPER: Robust JSON parsing that handles markdown code blocks
+// HELPER: Robust JSON parsing that handles markdown code blocks and trailing text
 const safeParseJSON = <T>(text: string): T => {
   try {
-    // Remove ```json ... ``` or just ``` ... ``` wrappers
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+        try {
+            return JSON.parse(match[0]) as T;
+        } catch (innerErr) {
+            // fallback to cleaned if regex match wasn't valid
+        }
+    }
     const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleaned) as T;
   } catch (e) {
@@ -257,6 +264,9 @@ export const generateTutorResponse = async (
 
     if (isWebSearchMode) {
       options.config.tools = [{ googleSearch: {} }];
+      delete options.config.responseMimeType;
+      delete options.config.responseSchema;
+      options.config.systemInstruction += "\n\nCRITICAL: You MUST output your final answer as a raw JSON object with the keys: " + (isQuickMode ? '["speech_response"]' : '["svg_code", "speech_response", "scaffolding_state"]') + ". Do not include any text outside the JSON object.";
     }
 
     const response = await generateWithFallback(ai, primaryModel, options);

@@ -17,6 +17,7 @@ interface TutorViewProps {
 
 const STORAGE_KEY_HISTORY = 'mindmeld_chat_history';
 const STORAGE_KEY_VISUALS = 'mindmeld_visual_state_v3';
+const STORAGE_KEY_MEMORY = 'mindmeld_tutor_memory';
 
 type VisualTab = 'illustration' | 'map';
 
@@ -122,7 +123,9 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
       }
   };
 
-  const [localMemory, setLocalMemory] = useState<string>('');
+  const [localMemory, setLocalMemory] = useState<string>(() => {
+    return localStorage.getItem(STORAGE_KEY_MEMORY) || '';
+  });
   const [isMemoryEditorOpen, setIsMemoryEditorOpen] = useState(false);
   const [memoryEditText, setMemoryEditText] = useState('');
   
@@ -181,6 +184,10 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
         setMemoryEditText(activeTutorMemory); // Sync Active Tutor Memory to Editor so it appears in modal
     }
   }, [activeTutorMemory]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_MEMORY, localMemory);
+  }, [localMemory]);
 
   useEffect(() => {
     mermaid.initialize({ 
@@ -334,6 +341,8 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
     setMessages([]);
     localStorage.removeItem(STORAGE_KEY_HISTORY);
     localStorage.removeItem(STORAGE_KEY_VISUALS);
+    localStorage.removeItem(STORAGE_KEY_MEMORY);
+    setLocalMemory('');
     
     // Reset visuals
     setCurrentMindmap(null);
