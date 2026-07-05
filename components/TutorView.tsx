@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Mic, MicOff, Headphones, Brain, CheckCircle, XCircle, ArrowRight, Plus, X, Volume2, Network, Image as ImageIcon, Link, BrainCircuit, Edit3, Save, Loader, MessageCircleQuestion, Square, RefreshCw, Wand2, Play, Trash2, Copy, Check, Maximize2, Minimize2 } from 'lucide-react';
 import mermaid from 'mermaid';
-import { generateTutorResponse, generateWebSearchResponse, generateMindmapOnly, regenerateSVG, generateAnimatedSVG } from '../services/gemini';
+import { generateTutorResponse, generateMindmapOnly, regenerateSVG, generateAnimatedSVG } from '../services/gemini';
 import { speak, stopSpeaking } from '../services/speech';
 import { resizeImage } from '../services/mediaUtils';
 import { TutorResponse, ChatMessage } from '../types';
@@ -470,13 +470,10 @@ const TutorView: React.FC<TutorViewProps> = ({ contextMemory, contextImage, cont
 
     try {
       const history = messages.map(m => ({ role: m.role, text: m.text }));
-      const response: TutorResponse = isWebSearchMode
-        ? await generateWebSearchResponse(
-              text, history, contextMemory, localMemory || null, isQuickMode
-          )
-        : await generateTutorResponse(
-              text, history, contextMemory, imageToSend, mimeToSend, localMemory || null, isQuickMode, false
-          );
+      // Pass isQuickMode and isWebSearchMode
+      const response: TutorResponse = await generateTutorResponse(
+          text, history, contextMemory, imageToSend, mimeToSend, localMemory || null, isQuickMode, isWebSearchMode
+      );
 
       if (ac.signal.aborted) return;
       
